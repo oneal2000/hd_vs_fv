@@ -5,23 +5,6 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig
 
 ENTITY_MARKER = "[ENTITY_MARKER]"
 
-def save_results_jsonl(results_list, output_path):
-    try:
-        print(f"\nSaving final results ({len(results_list)} items) to {output_path}...")
-        with open(output_path, 'w', encoding='utf-8') as f:
-            for entry in results_list:
-                try:
-                    f.write(json.dumps(entry) + '\n')
-                except TypeError as te:
-                    print(f"Warning: Skipping entry due to TypeError during JSON serialization: {te}")
-                    print(f"Problematic Entry (first 100 chars): {str(entry)[:100]}...")
-                except Exception as entry_e:
-                    print(f"Warning: Skipping entry due to unexpected error during JSON serialization: {entry_e}")
-                    print(f"Problematic Entry (first 100 chars): {str(entry)[:100]}...")
-        print(f"Results successfully saved to {output_path}")
-    except Exception as e:
-        print(f"FATAL Error saving results file {output_path}: {e}")
-
 def load_model_and_tokenizer(model_name_or_path: str,
                              torch_dtype_str: str = "auto",
                              add_entity_marker: bool = True,

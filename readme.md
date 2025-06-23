@@ -12,13 +12,12 @@ This repository provides implementations for hallucination detection and fact ve
 
 ## Installation
 
-### Environment Setup
-
-Create and activate a conda environment:
-
 ```bash
+# Create environment
 conda create -n hd_vs_fv python=3.10
 conda activate hd_vs_fv
+
+# Install dependencies
 pip install -r requirements.txt -f https://download.pytorch.org/whl/torch_stable.html
 python -m spacy download en_core_web_sm
 ```
@@ -67,33 +66,102 @@ python -m scripts.hallucination_detection \
     --model_name_or_path meta-llama/Llama-3.1-8B-Instruct \
     --judge_model_name_or_path meta-llama/Llama-3.1-8B-Instruct \
     --dataset_name "popqa" \
-    --dataset_type "total"
+    --dataset_type "total" \
+    --detect_methods lnpp
 ```
 
-**Available training-free methods:** `mqag`, `bertscore`, `ngram`, `nli`, `ptrue`, `lnpp`, `lnpe`, `semantic_entropy`, `seu`, `sindex`
+**Available training-free methods:** 
+- `lnpp`
+- `lnpe`
+- [`SelfCheckGPT`](http://arxiv.org/abs/2303.08896)
+  - `mqag`
+  - `bertscore`
+  - `ngram`
+  - `nli`
+- [`ptrue`](http://arxiv.org/abs/2207.05221)
+- [`semantic_entropy`](https://www.nature.com/articles/s41586-024-07421-0)
+- [`seu`](http://arxiv.org/abs/2410.22685)
+- [`sindex`](http://arxiv.org/abs/2503.05980)
+
 
 ### Methods Requiring Training
 
-#### EUBHD
+#### [`EUBHD`](http://arxiv.org/abs/2311.13230)
 
 ```bash
+# Generate token frequency statistics
 python -m scripts.eubhd.count --tokenizer meta-llama/Llama-3.1-8B-Instruct
 ```
 
-#### MIND
+After training the EUBHD method, you can evaluate it using the following command:
 
-1. Download the wiki dataset from the [official repository](https://github.com/oneal2000/MIND/tree/main)
-2. Process using scripts in `scripts/mind/` in the following order:
-   - `generate`
-   - `extract`
-   - `train`
+```bash
+python -m scripts.hallucination_detection \
+    --model_name_or_path meta-llama/Llama-3.1-8B-Instruct \
+    --detect_methods eubhd \
+    --dataset_name "2wikimultihopqa" \
+    --dataset_type "bridge_comparison" \
+    --eubhd_idf_path eubhd_idf/token_idf_Llama-3.1-8B-Instruct.pkl
+```
 
-#### SAPLMA
+#### [`SAPLMA`](https://arxiv.org/abs/2304.13734v2)
 
-1. Download the dataset from [azariaa.com](azariaa.com/Content/Datasets/true-false-dataset.zip)
-2. Process using scripts in `scripts/saplma/` in the following order:
-   - `extract`
-   - `train`
+```bash
+# 1. Extract features from last layer
+python -m scripts.saplma.extract_features \
+    --model_name_or_path meta-llama/Llama-3.1-8B-Instruct \
+    --input_dir_path training_data/SAPLMA \
+    --output_dir_path saplma/Llama-3.1-8B-Instruct_-1/data \
+
+# 2. Train probe
+python -m scripts.saplma.train_probe \
+    --embedding_dir_path saplma/Llama-3.1-8B-Instruct_-1/data \
+    --output_probe_path saplma/Llama-3.1-8B-Instruct_-1/probe.pt
+```
+
+
+After training the SAPLMA method, you can evaluate it using the following command:
+
+```bash
+python -m scripts.hallucination_detection \
+    --model_name_or_path meta-llama/Llama-3.1-8B-Instruct \
+    --detect_methods saplma \
+    --dataset_name "2wikimultihopqa" \
+    --dataset_type "bridge_comparison" \
+    --saplma_probe_path saplma/Llama-3.1-8B-Instruct_-1/probe.pt
+```
+
+#### [`MIND`](http://arxiv.org/abs/2403.06448)
+
+```bash
+# 1. Generate training data
+python -m scripts.mind.generate_data \
+    --model_name_or_path meta-llama/Llama-3.1-8B-Instruct \
+    --wiki_data_dir training_data/MIND \
+    --output_dir mind/Llama-3.1-8B-Instruct/text_data
+
+# 2. Extract internal features
+python -m scripts.mind.extract_features \
+    --model_name_or_path meta-llama/Llama-3.1-8B-Instruct \
+    --generated_data_dir mind/Llama-3.1-8B-Instruct/text_data \
+    --output_feature_dir mind/Llama-3.1-8B-Instruct/feature_data
+
+# 3. Train classifier
+python -m scripts.mind.train_mind \
+    --feature_dir mind/Llama-3.1-8B-Instruct/feature_data  \
+    --output_classifier_dir mind/Llama-3.1-8B-Instruct/classifier \
+```
+
+After training the MIND method, you can evaluate it using the following command:
+
+```bash
+python -m scripts.hallucination_detection \
+    --model_name_or_path meta-llama/Llama-3.1-8B-Instruct \
+    --detect_methods mind \
+    --dataset_name "2wikimultihopqa" \
+    --dataset_type "bridge_comparison" \
+    --mind_classifier_path mind/Llama-3.1-8B-Instruct/classifier/mind_classifier_best.pt
+```
 
 ## Fact Verification
 
@@ -133,16 +201,20 @@ python prep_elastic.py --data_path data/dpr/psgs_w100.tsv --index_name wiki
 ```bash
 python -m scripts.bert.generate_data \
     --model_name_or_path meta-llama/Llama-3.1-8B-Instruct \
-    --judge_model_name_or_path Qwen/Qwen2.5-32B-Instruct
+    --judge_model_name_or_path Qwen/Qwen2.5-32B-Instruct \
+    --data_path bert/training_data.json
 ```
 
 2. **Train the classifier:**
 
 ```bash
 python -m scripts.bert.train_bert \
-    --data_path "data/train/bert/training_data.json" \
     --output_dir "bert_classifier" \
     --retrieval_type "question_only"
+
+python -m scripts.bert.train_bert \
+    --output_dir "bert_classifier" \
+    --retrieval_type "question_answer"
 ```
 
 ### Running Fact Verification
@@ -162,5 +234,34 @@ python -m scripts.fact_verification \
 Evaluate detection and fact verification results using AUROC scores:
 
 ```bash
-python src/evaluate.py <path_to_results_jsonl>
+python -m scripts.evaluation \
+    --model_name_or_path  meta-llama/Llama-3.1-8B-Instruct \
+    --judge_model_name_or_path  Qwen/Qwen2.5-32B-Instruct \
+    --dataset_name "triviaqa" \
+    --dataset_type "total"
+```
+
+You will get the results in `results/<model_name>/<dataset_name>/<dataset_type>/evaluation_summary.json`
+
+Example:
+
+```json
+{
+  "fv_BERT_Q": {
+    "method": "fv_BERT_Q",
+    "total_items": 500,
+    "valid_scores": 500,
+    "auroc": 0.7215166666666666,
+    "positive_cases": 200,
+    "negative_cases": 300
+  },
+    "lnpe": {
+    "method": "lnpe",
+    "total_items": 500,
+    "valid_scores": 500,
+    "auroc": 0.7524249999999998,
+    "positive_cases": 200,
+    "negative_cases": 300
+  }
+}
 ```

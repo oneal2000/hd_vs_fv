@@ -44,7 +44,7 @@ def parse_arguments():
     parser.add_argument("--judge_model_name_or_path", type=str, required=True, help="Model for LLM-as-a-judge.")
     parser.add_argument("--judge_device", type=str, default="auto", choices=['cuda', 'cpu', 'auto'], help="Device for judge model.")
     parser.add_argument("--judge_max_retries", type=int, default=3, help="Max retries for LLM judge if parsing fails.")
-    parser.add_argument("--judge_retry_delay", type=int, default=2, help="Delay (seconds) between LLM judge retries.")
+    parser.add_argument("--judge_retry_delay", type=int, default=0, help="Delay (seconds) between LLM judge retries.")
     parser.add_argument("--cache_base_dir", type=str, default="cache", help="Base directory to store judge caches.")
 
     # Data and Output Args

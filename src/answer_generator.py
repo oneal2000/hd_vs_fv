@@ -16,7 +16,7 @@ class AnswerGenerator:
                  trust_remote_code: bool = True):
         self.model_name_or_path = model_name_or_path
         self.base_seed = base_seed
-        self.assistant_prompt_continuation: str = "The answer is "
+        self.assistant_prompt_continuation: str = ""
         print(f"Initializing AnswerGenerator for model: {model_name_or_path} with device preference: {device_preference}")
         print(f"Using hardcoded assistant prompt continuation: '{self.assistant_prompt_continuation}'")
 
@@ -87,15 +87,17 @@ The possible answer is:"""
                         return_tensors="pt"
                     )
 
-                    continuation_ids_cpu = self.tokenizer.encode(
-                        self.assistant_prompt_continuation,
-                        add_special_tokens=False,
-                        return_tensors="pt"
-                    )
-                    if continuation_ids_cpu.dim() == 1:
-                        continuation_ids_cpu = continuation_ids_cpu.unsqueeze(0)
-
-                    input_ids = torch.cat([input_ids_templated_cpu, continuation_ids_cpu], dim=1).to(self.device)
+                    if self.assistant_prompt_continuation.strip():
+                        continuation_ids_cpu = self.tokenizer.encode(
+                            self.assistant_prompt_continuation,
+                            add_special_tokens=False,
+                            return_tensors="pt"
+                        )
+                        if continuation_ids_cpu.dim() == 1:
+                            continuation_ids_cpu = continuation_ids_cpu.unsqueeze(0)
+                        input_ids = torch.cat([input_ids_templated_cpu, continuation_ids_cpu], dim=1).to(self.device)
+                    else:
+                        input_ids = input_ids_templated_cpu.to(self.device)
                     attention_mask = torch.ones_like(input_ids).to(self.device)
 
                 except Exception as e:

@@ -127,7 +127,7 @@ def evaluate_model(
 def main():
     parser = argparse.ArgumentParser(description="Train BERT Fact Verification Model")
     parser.add_argument("--bert_model_name", type=str, default="bert-base-uncased", help="Pretrained BERT model name or path")
-    parser.add_argument("--data_path", type=str, required=True, help="Path to the training data JSON file")
+    parser.add_argument("--data_path", type=str, default="bert/training_data.json", help="Path to the training data JSON file")
     parser.add_argument("--output_dir", type=str, required=True, help="Directory to save the trained model")
     parser.add_argument("--retrieval_type", type=str, choices=['question_only', 'question_answer'], default='question_only')
     parser.add_argument("--max_seq_length", type=int, default=512)

@@ -86,7 +86,8 @@ class SelfCheckGPTWrapper:
                sample_answers: List[str],
                question: Optional[str] = None,
                methods_to_run: Optional[List[str]] = None,
-               split_sentences: bool = True
+               split_sentences: bool = True,
+               aggregation_strategy: str = "max"
                ) -> Dict[str, Any]:
         if not main_answer or not sample_answers:
             print("Warning: main_answer or sample_answers are empty. Skipping detection.")
@@ -115,28 +116,51 @@ class SelfCheckGPTWrapper:
             if not methods_to_run:
                 print("Warning: No valid methods specified to run.")
                 return {'sentences': sentences}
-            
-        print(f"Running detection for methods: {methods_to_run} on {len(sentences)} sentence(s)")
 
         results = {'sentences': sentences} # Always include sentences
 
+        def _aggregate_scores(scores, strategy="max"):
+            """Aggregate a list of scores into a single value"""
+            if scores is None or not scores:
+                return None
+            
+            # Filter out None values
+            valid_scores = [s for s in scores if s is not None and not (isinstance(s, float) and (np.isnan(s) or np.isinf(s)))]
+            if not valid_scores:
+                return None
+                
+            if strategy == "max":
+                return max(valid_scores)
+            elif strategy == "avg":
+                return sum(valid_scores) / len(valid_scores)
+            else:
+                return max(valid_scores)  # Default to max
+
         def assign_result(method_key, score_value, num_sent):
             if score_value is None:
-                 results[method_key] = None if num_sent == 1 else [None] * num_sent
+                 results[method_key] = None
             elif isinstance(score_value, np.ndarray):
-                 if np.isnan(score_value).any():
-                      print(f"Warning: NaN found in scores for method '{method_key}'. Replacing with None.")
-                      results[method_key] = [None if np.isnan(v) else v for v in score_value.tolist()]
+                 if np.isnan(score_value).any() or np.isinf(score_value).any():
+                      processed_scores = []
+                      for v in score_value.tolist():
+                          if np.isnan(v):
+                              processed_scores.append(None)
+                          elif np.isinf(v):
+                              # Replace infinity with a large finite value
+                              processed_scores.append(1e9 if v > 0 else -1e9)
+                          else:
+                              processed_scores.append(v)
+                      # Aggregate the processed scores
+                      results[method_key] = _aggregate_scores(processed_scores, aggregation_strategy)
                  else:
-                      results[method_key] = score_value.tolist()
+                      # Aggregate the numpy array scores
+                      results[method_key] = _aggregate_scores(score_value.tolist(), aggregation_strategy)
             elif isinstance(score_value, list) or isinstance(score_value, tuple):
-                 if len(score_value) == num_sent:
-                     results[method_key] = list(score_value)
-                 else:
-                     print(f"Warning: Score list length mismatch for {method_key}. Expected {num_sent}, got {len(score_value)}. Storing as is.")
-                     results[method_key] = list(score_value) # Store anyway, might indicate an issue
+                 # Aggregate the list/tuple scores
+                 results[method_key] = _aggregate_scores(list(score_value), aggregation_strategy)
             else:
-                 results[method_key] = [score_value] if num_sent == 1 else score_value # Store single score in a list if sentences=1
+                 # Single score value
+                 results[method_key] = score_value
 
 
         if 'mqag' in methods_to_run:
