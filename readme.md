@@ -64,7 +64,6 @@ Run hallucination detection with methods that don't require additional training:
 ```bash
 python -m scripts.hallucination_detection \
     --model_name_or_path meta-llama/Llama-3.1-8B-Instruct \
-    --judge_model_name_or_path meta-llama/Llama-3.1-8B-Instruct \
     --dataset_name "popqa" \
     --dataset_type "total" \
     --detect_methods lnpp
